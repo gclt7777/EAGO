@@ -23,6 +23,9 @@ function OS_AE_T(Global)
     % 首次：分组 + 指派 + 拟合 T
     [O_groups,S_groups,map] = group_and_assign_map(Population,K,topFrac,lambda);
     if emaA>0, map_prev = map; end
+    residual_ref = map_prediction_residual(map, Population.decs, Population.objs);
+    active_ref = count_active_columns(S_groups);
+    tol_res = 1e-8;
 
     %% 主循环
     while Global.NotTermination(Population)
@@ -34,25 +37,56 @@ function OS_AE_T(Global)
         doReGroup = (gen==1) || (mod(gen-1,periodGroup)==0);
         doFitT    = (gen==1) || (mod(gen-1,tPeriod)==0);
 
-        if doReGroup
-            [O_groups,S_groups,map_new0] = group_and_assign_map(Population,K,topFrac,lambda);
-        elseif doFitT
-            map_new0 = fitMap_ridgeSVD(Y,X,lambda);
-        else
-            map_new0 = map; % 本代不变
+        residual_now = map_prediction_residual(map,X,Y);
+        active_now   = count_active_columns(S_groups);
+
+        if residual_now > residual_ref*(1+tol_res)
+            doFitT = true;
         end
 
-        % —— 仅对 T 做 EMA 平滑（统计量用最新） ——
-        if doFitT
-            if emaA>0 && ~isempty(map_prev)
-                map_blend.T   = (1-emaA)*map_prev.T + emaA*map_new0.T;
-                map_blend.muY = map_new0.muY;  map_blend.sigY = map_new0.sigY;
-                map_blend.muX = map_new0.muX;  map_blend.sigX = map_new0.sigX;
-                map = map_blend; map_prev = map_blend;
-            else
-                map = map_new0;  map_prev = map_new0;
+        map_candidate = map;
+        map_updated   = false;
+
+        if doReGroup
+            [O_new,S_new,map_new] = group_and_assign_map(Population,K,topFrac,lambda);
+            residual_new = map_prediction_residual(map_new,X,Y);
+            active_new   = count_active_columns(S_new);
+
+            if residual_new <= residual_now*(1+tol_res) && active_new <= active_ref
+                O_groups = O_new;
+                S_groups = S_new;
+                active_now = active_new;
+                map_candidate = map_new;
+                residual_now = residual_new;
+                map_updated = true;
+            elseif residual_new < residual_now
+                map_candidate = map_new;
+                residual_now = residual_new;
+                map_updated = true;
+            end
+        elseif doFitT
+            map_new = fitMap_ridgeSVD(Y,X,lambda);
+            residual_new = map_prediction_residual(map_new,X,Y);
+            if residual_new <= residual_now*(1+tol_res)
+                map_candidate = map_new;
+                residual_now = residual_new;
+                map_updated = true;
             end
         end
+
+        if map_updated
+            if emaA>0 && ~isempty(map_prev)
+                map_blend.T   = (1-emaA)*map_prev.T + emaA*map_candidate.T;
+                map_blend.muY = map_candidate.muY;  map_blend.sigY = map_candidate.sigY;
+                map_blend.muX = map_candidate.muX;  map_blend.sigX = map_candidate.sigX;
+                map = map_blend; map_prev = map_blend;
+            else
+                map = map_candidate;  map_prev = map_candidate;
+            end
+        end
+
+        residual_ref = map_prediction_residual(map,X,Y);
+        active_ref   = count_active_columns(S_groups);
 
         % —— 分组：PCA→DE 生成，并用子块 T(Ok,Sk) 写回各自列 ——
         for k = 1:numel(O_groups)
@@ -202,6 +236,22 @@ function Xhat_Sk = apply_map_sub(map,Yk_new,Ok,Sk)
 Yz  = bsxfun(@rdivide, bsxfun(@minus, Yk_new, map.muY(Ok)), map.sigY(Ok));
 Xz  = Yz * map.T(Ok,Sk);
 Xhat_Sk = bsxfun(@plus, bsxfun(@times, Xz, map.sigX(Sk)), map.muX(Sk));
+end
+
+function residual = map_prediction_residual(map,X,Y)
+Yz  = bsxfun(@rdivide, bsxfun(@minus, Y, map.muY), map.sigY);
+Xz  = bsxfun(@rdivide, bsxfun(@minus, X, map.muX), map.sigX);
+pred = Yz * map.T;
+den = norm(Xz,'fro');
+if den==0, den = 1; end
+residual = norm(pred - Xz,'fro')/den;
+end
+
+function n = count_active_columns(S_groups)
+n = 0;
+for k = 1:numel(S_groups)
+    n = n + numel(S_groups{k});
+end
 end
 
 %% ============ 环境选择：非支配 + 角度截断 ============
