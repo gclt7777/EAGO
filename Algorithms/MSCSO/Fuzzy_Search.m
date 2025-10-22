@@ -10,7 +10,7 @@ Step(S+2) = Rate*Total;  % compensation step
 %% Fuzzy Operation
 ParticleDec = Particles.decs;
 R    = Problem.upper-Problem.lower;
-iter = Problem.FE/Problem.maxFE;  % step=[0,0.6,0.8,0.8]
+iter = get_progress_ratio(Problem);  % step=[0,0.6,0.8,0.8]
 for i = 1 : S+1
     if iter>Step(i) && iter<=Step(i+1)
         gamma_a = R*10^-i.*floor(10^i*R.^-1.*(ParticleDec-Problem.lower)) + Problem.lower;
@@ -42,4 +42,50 @@ for i = 1 : S+1
     end
 end
 OffDec = [quadrant1;quadrant2;quadrant3;quadrant4];
+end
+
+function ratio = get_progress_ratio(Problem)
+    [currentFE,maxFE] = get_evaluation_info(Problem);
+    if maxFE <= 0
+        ratio = 0;
+    else
+        ratio = max(0,min(1,currentFE./maxFE));
+    end
+end
+
+function [currentFE,maxFE] = get_evaluation_info(Problem)
+    currentFE = get_prop_or_field(Problem,{"FE","evaluated","Evaluated","currentFE","CurrentFE"});
+    maxFE     = get_prop_or_field(Problem,{"maxFE","MaxFE","evaluation","Evaluation","maxEvaluations","MaxEvaluations","maxEvaluation","MaxEvaluation"});
+    if isempty(currentFE)
+        currentFE = 0;
+    end
+    if isempty(maxFE)
+        maxFE = 0;
+    end
+end
+
+function value = get_prop_or_field(Problem,candidates)
+    value = [];
+    for i = 1:numel(candidates)
+        name = candidates{i};
+        if isstruct(Problem) && isfield(Problem,name)
+            candidate = Problem.(name);
+        elseif isprop_safe(Problem,name)
+            candidate = Problem.(name);
+        else
+            candidate = [];
+        end
+        if ~isempty(candidate)
+            value = candidate;
+            return;
+        end
+    end
+end
+
+function tf = isprop_safe(obj,name)
+    try
+        tf = isprop(obj,name);
+    catch
+        tf = false;
+    end
 end
