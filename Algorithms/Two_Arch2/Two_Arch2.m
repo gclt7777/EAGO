@@ -1,39 +1,49 @@
-classdef Two_Arch2 < ALGORITHM
-% <2015> <multi/many> <real/integer/label/binary/permutation>
-% Two-archive algorithm 2
-% CAsize --- --- Convergence archive size
-% p      --- --- The parameter of fractional distance
-
+function Two_Arch2(Global)
+% <algorithm> <M>
+% Two_Archive2 (old-API wrapper)
+% This function-based variant mirrors the legacy PlatEMO workflow so that
+% Two_Archive2 can run inside historical releases expecting function
+% handles rather than ALGORITHM subclasses.
+%
 %------------------------------- Reference --------------------------------
-% H. Wang, L. Jiao, and X. Yao. Two_Arch2: An improved two-archive
-% algorithm for many-objective optimization. IEEE Transactions on
-% Evolutionary Computation, 2015, 19(4): 524-541.
-%------------------------------- Copyright --------------------------------
-% Copyright (c) 2025 BIMK Group. You are free to use the PlatEMO for
-% research purposes. All publications which use this platform or any code
-% in the platform should acknowledge the use of "PlatEMO" and reference "Ye
-% Tian, Ran Cheng, Xingyi Zhang, and Yaochu Jin, PlatEMO: A MATLAB platform
-% for evolutionary multi-objective optimization [educational forum], IEEE
-% Computational Intelligence Magazine, 2017, 12(4): 73-87".
+% M. Li, S. Yang, and X. Liu, An improved two-archive algorithm for
+% many-objective optimization, European Journal of Operational Research,
+% 2014, 243(2): 556-567.
 %--------------------------------------------------------------------------
 
-    methods
-        function main(Algorithm,Problem)
-            %% Parameter setting
-            [CAsize,p] = Algorithm.ParameterSet(Problem.N,1/Problem.M);
+    %% Generate initial population and the two archives
+    Population = Global.Initialization();
+    [CA,DA,FrontNo,CrowdDis] = EnvironmentalSelection(Population, Global.N);
 
-            %% Generate random population
-            Population = Problem.Initialization();
-            CA = UpdateCA([],Population,CAsize);
-            DA = UpdateDA([],Population,Problem.N,p);
-
-            %% Optimization
-            while Algorithm.NotTerminated(DA)
-                [ParentC,ParentM] = MatingSelection(CA,DA,Problem.N);
-                Offspring         = [OperatorGA(Problem,ParentC,{1,20,0,0}),OperatorGA(Problem,ParentM,{0,0,1,20})];
-                CA = UpdateCA(CA,Offspring,CAsize);
-                DA = UpdateDA(DA,Offspring,Problem.N,p);
+    %% Optimization
+    while Global.NotTermination(CA)
+        %% Exploitative mating from the convergence archive (CA)
+        numGA = 2 * ceil(Global.N/2);
+        if isempty(CA)
+            OffspringCA = INDIVIDUAL.empty();
+        else
+            % Tournament selection prefers lower ranks and larger crowding
+            if numel(CA) == 1
+                parents = repmat(1,1,numGA);
+            else
+                parents = TournamentSelection(2, numGA, FrontNo, -CrowdDis);
             end
+            OffspringCA = GAhalf(CA(parents));
         end
+
+        %% Explorative mating from the diversity archive (DA)
+        numDE = max(Global.N - numel(OffspringCA), 0);
+        if numDE > 0 && ~isempty(DA) && ~isempty(CA)
+            baseIdx   = randi(numel(DA), 1, numDE);
+            guideIdx1 = randi(numel(CA), 1, numDE);
+            guideIdx2 = randi(numel(CA), 1, numDE);
+            OffspringDA = DE(DA(baseIdx), CA(guideIdx1), CA(guideIdx2));
+        else
+            OffspringDA = INDIVIDUAL.empty();
+        end
+
+        %% Update both archives using the newly generated offspring
+        Merged = [CA, DA, OffspringCA, OffspringDA];
+        [CA,DA,FrontNo,CrowdDis] = EnvironmentalSelection(Merged, Global.N);
     end
 end
