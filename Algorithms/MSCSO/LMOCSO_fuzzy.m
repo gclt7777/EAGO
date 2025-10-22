@@ -48,5 +48,37 @@ OffDec(temp) = OffDec(temp)+(Upper(temp)-Lower(temp)).*((2.*mu(temp)+(1-2.*mu(te
 temp  = Site & mu>0.5;
 OffDec(temp) = OffDec(temp)+(Upper(temp)-Lower(temp)).*(1-(2.*(1-mu(temp))+2.*(mu(temp)-0.5).*...
     (1-(Upper(temp)-OffDec(temp))./(Upper(temp)-Lower(temp))).^(disM+1)).^(1/(disM+1)));
-Offspring = Problem.Evaluation(OffDec,OffVel);
+Offspring = call_evaluation(Problem,OffDec,OffVel);
+end
+
+function Offspring = call_evaluation(Problem,OffDec,OffVel)
+    if nargin < 3
+        OffVel = [];
+    end
+    if has_evaluation_method(Problem)
+        Offspring = Problem.Evaluation(OffDec,OffVel);
+    else
+        Offspring = INDIVIDUAL(OffDec,OffVel);
+    end
+end
+
+function tf = has_evaluation_method(obj)
+    tf = false;
+    if isempty(obj)
+        return;
+    end
+    try
+        tf = ismethod(obj,'Evaluation');
+        if tf
+            return;
+        end
+    catch
+        tf = false;
+    end
+    try
+        m = methods(obj);
+        tf = any(strcmp(m,'Evaluation'));
+    catch
+        tf = false;
+    end
 end
