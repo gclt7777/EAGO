@@ -1,4 +1,5 @@
 function PHLMEA(Global)
+% <algorithm> <M>
 %PHLMEA Population-Hierarchical Learning-based EA for large-scale MaOO.
 %
 %   This implementation follows the description of the population
