@@ -1,24 +1,36 @@
-function [EntropyQ] = CalculateEntropy(UQpi,ConnectZNum,pi,N)
-    
-    EachZnum = zeros(1,ConnectZNum);
-    %计算种群现在的信息熵
-    for i =1:ConnectZNum
-        a = find(pi == UQpi(i));
-        EachZnum(i) = length(a);
-    end
-    EntropyNow = 0;
-    for i = 1:length(EachZnum)
-        EntropyNow = EntropyNow - (EachZnum(i)/N) *log2((EachZnum(i)/N));
+function EntropyQ = CalculateEntropy(UQpi,ConnectZNum,pi,N)
+
+    if ConnectZNum == 0 || N == 0
+        EntropyQ = 0;
+        return;
     end
 
-    %计算种群最佳信息熵
-    bestZnum = floor(N/ConnectZNum);
+    EachZnum = zeros(1,ConnectZNum);
+    for i = 1 : ConnectZNum
+        EachZnum(i) = sum(pi == UQpi(i));
+    end
+
+    EntropyNow = 0;
+    for i = 1 : ConnectZNum
+        ratio = EachZnum(i) / N;
+        if ratio > 0
+            EntropyNow = EntropyNow - ratio * log2(ratio);
+        end
+    end
+
+    bestZnum   = floor(N/ConnectZNum);
     remainZnum = N - bestZnum*ConnectZNum;
-    EntropyBest = -(ConnectZNum-remainZnum)*(bestZnum/N)*log2(bestZnum/N)-remainZnum*((bestZnum+1)/N)*log2(((bestZnum+1)/N));
-    % bestZnumG = floor(N/NZ);
-    % remainZnumG = N -bestZnumG*NZ;
-    % EntropyBestG = -(NZ-remainZnumG)*(bestZnumG/N)*log2(bestZnumG/N)-remainZnumG*((bestZnumG+1)/N)*log2((bestZnumG+1)/N);
-    % EntropyQG = EntropyNow /EntropyBestG;
-    %利用信息熵比值计算领域数量
-    EntropyQ = EntropyNow/EntropyBest;
+    EntropyBest = 0;
+    if bestZnum > 0
+        EntropyBest = EntropyBest - (ConnectZNum-remainZnum)*(bestZnum/N)*log2(bestZnum/N);
+    end
+    if remainZnum > 0
+        EntropyBest = EntropyBest - remainZnum*((bestZnum+1)/N)*log2((bestZnum+1)/N);
+    end
+
+    if EntropyBest == 0
+        EntropyQ = 0;
+    else
+        EntropyQ = EntropyNow/EntropyBest;
+    end
 end
