@@ -4,7 +4,8 @@ classdef RKSTAEA < ALGORITHM
     methods
         function main(Algorithm,Problem)
             %% Parameter setting
-            CAsize= Algorithm.ParameterSet(Problem.N);
+            CAsize = Algorithm.ParameterSet(Problem.N);
+            CAsize = max(1,min(Problem.N,round(CAsize)));
 
             %% Generate random population
             Population = Problem.Initialization();
