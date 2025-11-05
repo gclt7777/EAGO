@@ -93,13 +93,18 @@ function [front,normalization] = Normalize(front,Extreme)
 
     % Calculate the intercepts of the hyperplane constructed by the extreme
     % points and the axes
-    Hyperplane = front(Extreme,:)\ones(n,1);
-    if any(isnan(Hyperplane)) || any(isinf(Hyperplane)) || any(Hyperplane<0)
-         normalization = max(front,[],1)';
+    A = front(Extreme,:);
+    if size(A,1) < n
+        normalization = max(front,[],1)';
     else
-        normalization = 1./Hyperplane;
-        if any(isnan(normalization)) || any(isinf(normalization))
-            normalization = max(front,[],1)';
+        Hyperplane = A\ones(size(A,1),1);
+        if any(isnan(Hyperplane)) || any(isinf(Hyperplane)) || any(Hyperplane<0)
+             normalization = max(front,[],1)';
+        else
+            normalization = 1./Hyperplane;
+            if any(isnan(normalization)) || any(isinf(normalization))
+                normalization = max(front,[],1)';
+            end
         end
     end
     % Normalization
